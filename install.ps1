@@ -1,4 +1,4 @@
-# 学习计时 · Windows 安装脚本
+﻿# 学习计时 · Windows 安装脚本
 # 用法：右键「使用 PowerShell 运行」，或
 #   powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 #
