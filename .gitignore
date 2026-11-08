@@ -1,0 +1,10 @@
+# 运行时（首次安装时下载）
+runtime/
+
+# 本机数据
+data/
+
+# 系统/编辑器杂物
+.DS_Store
+Thumbs.db
+*.log
