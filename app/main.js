@@ -387,6 +387,13 @@ ipcMain.on('win:shape', (_e, size) => {
   }
 })
 
+// 首次运行 data/ 还不存在；必须在设置 userData 之前建好，
+// 否则 Electron 拿不到可用的 userData 目录会直接静默退出。
+try {
+  fs.mkdirSync(DATA_DIR, { recursive: true })
+} catch (err) {
+  console.error('[study-timer] cannot create data dir:', err)
+}
 app.setPath('userData', path.join(DATA_DIR, 'electron'))
 app.setAppUserModelId('dsh.study.timer')
 
