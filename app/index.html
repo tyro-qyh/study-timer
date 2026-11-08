@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>学习计时</title>
+<style>
+  :root{
+    --bg: rgba(17,19,23,.88);
+    --line: rgba(255,255,255,.08);
+    --fg: #e8eaee;
+    --dim: #8b93a1;
+    --accent: #4ade80;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:transparent; overflow:hidden; }
+  body{
+    font-family: -apple-system, "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+    user-select:none;
+  }
+
+  /* ---------- 完整模式 ---------- */
+  .card{
+    height:100%;
+    display:flex; flex-direction:column;
+    background: var(--bg);
+    border:1px solid var(--line);
+    border-radius:16px;
+    overflow:hidden;
+    box-shadow: 0 18px 50px rgba(0,0,0,.45);
+  }
+
+  header{
+    -webkit-app-region: drag;
+    display:flex; align-items:center; gap:10px;
+    padding:14px 16px 8px;
+  }
+  .sum{ font-size:26px; font-weight:600; letter-spacing:.5px; font-variant-numeric: tabular-nums; }
+  .sum-label{ font-size:12px; color:var(--dim); }
+  .spacer{ flex:1; }
+  .ico{
+    -webkit-app-region: no-drag;
+    width:22px; height:22px; border-radius:11px;
+    display:grid; place-items:center;
+    color:var(--dim); font-size:14px; line-height:1; cursor:pointer;
+    transition: background .15s, color .15s;
+  }
+  .ico:hover{ background:rgba(255,255,255,.1); color:var(--fg); }
+
+  .tabs{ display:flex; gap:4px; padding:0 16px 10px; }
+  .tab{
+    font-size:12px; color:var(--dim);
+    padding:3px 10px; border-radius:8px; cursor:pointer;
+    border:1px solid transparent;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .tab:hover{ color:var(--fg); }
+  .tab.on{ color:#d7ffe4; background:rgba(74,222,128,.1); border-color:rgba(74,222,128,.28); }
+
+  .entry{ padding: 0 16px 10px; display:flex; gap:8px; align-items:center; }
+  .entry input[type=text]{
+    flex:1; min-width:0; height:36px;
+    background:rgba(255,255,255,.05);
+    border:1px solid var(--line); border-radius:10px;
+    padding:0 12px; color:var(--fg); font-size:13.5px;
+    outline:none; font-family:inherit;
+    transition: border-color .15s, background .15s;
+  }
+  .entry input[type=number]{
+    width:58px; height:36px; text-align:center;
+    background:rgba(255,255,255,.05);
+    border:1px solid var(--line); border-radius:10px;
+    color:var(--fg); font-size:13.5px; font-family:inherit;
+    outline:none; transition: border-color .15s, background .15s;
+    -moz-appearance:textfield;
+  }
+  .entry input[type=number]::-webkit-outer-spin-button,
+  .entry input[type=number]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  .entry .unit{ font-size:11.5px; color:#7c8494; }
+  .entry input::placeholder{ color:#7b8291; }
+  .entry input:focus{ border-color:rgba(74,222,128,.55); background:rgba(74,222,128,.06); }
+
+  .list{ flex:1; overflow-y:auto; padding: 0 10px 8px; }
+  .list::-webkit-scrollbar{ width:6px; }
+  .list::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.12); border-radius:3px; }
+
+  .row{
+    display:flex; align-items:center; gap:10px;
+    padding:8px 8px 9px 10px;
+    border-radius:10px; cursor:pointer;
+    position:relative; overflow:hidden;
+    transition: background .12s;
+  }
+  .row:hover{ background:rgba(255,255,255,.05); }
+  .row .name{
+    flex:1; min-width:0;
+    font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .row .num{ display:flex; flex-direction:column; align-items:flex-end; gap:1px; font-variant-numeric: tabular-nums; }
+  .row .num .main{ font-size:13px; color:var(--dim); }
+  .row .num .sub{ font-size:10.5px; color:#5f6875; }
+
+  .row .kill{
+    height:18px; min-width:18px; padding:0;
+    display:none; place-items:center;
+    border-radius:9px; color:var(--dim); font-size:12px; white-space:nowrap;
+  }
+  .row:hover .kill{ display:grid; }
+  .row .kill:hover{ background:rgba(255,80,80,.2); color:#ff8a8a; }
+  .row .kill.armed{
+    width:auto; padding:0 6px; border-radius:6px;
+    font-size:11px; color:#ffb4b4; background:rgba(255,80,80,.22);
+  }
+  .row .end{
+    height:18px; padding:0 6px; border-radius:6px;
+    display:none; place-items:center;
+    font-size:11px; color:#9aa4b2; background:rgba(255,255,255,.06);
+  }
+  .row:hover .end{ display:grid; }
+  .row .end:hover{ color:#fbbf24; background:rgba(251,191,36,.16); }
+
+  .row.running{ background:rgba(74,222,128,.09); }
+  .row.running .name{ color:#d7ffe4; }
+  .row.running .num .main{ color:var(--accent); }
+  .row.running::before{
+    content:""; position:absolute; left:2px; top:8px; bottom:8px; width:2px;
+    border-radius:2px; background:var(--accent);
+  }
+  .row.done{ opacity:.62; }
+  .row.done .num .main{ color:var(--accent); }
+  .row.ended .num .main{ color:#8b93a1; }
+  .row.ended .name{ color:#9aa4b2; }
+
+  .bar{ position:absolute; left:0; right:0; bottom:0; height:2px; background:rgba(255,255,255,.06); }
+  .bar i{ display:block; height:100%; background:var(--accent); transition: width .5s linear; }
+  .row.done .bar i{ background:rgba(74,222,128,.5); }
+
+  .dot{
+    width:6px; height:6px; border-radius:50%; background:var(--accent);
+    box-shadow:0 0 0 0 rgba(74,222,128,.55);
+    animation: pulse 1.6s infinite; flex:none;
+  }
+  @keyframes pulse{
+    0%{ box-shadow:0 0 0 0 rgba(74,222,128,.5); }
+    70%{ box-shadow:0 0 0 7px rgba(74,222,128,0); }
+    100%{ box-shadow:0 0 0 0 rgba(74,222,128,0); }
+  }
+
+  .row.total{ cursor:default; }
+  .row.total .num .main{ color:var(--fg); font-size:13.5px; }
+
+  .empty{ padding:24px 12px; text-align:center; color:#5f6875; font-size:12.5px; line-height:1.9; }
+
+  footer{
+    padding:8px 16px 11px;
+    border-top:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:11px; color:#7c8494;
+  }
+  footer b{ color:#a8b0bd; font-weight:500; }
+
+  /* ---------- 收起模式：只剩一个时间胶囊 ---------- */
+  .mini{
+    display:none;
+    height:100%;
+    align-items:center; justify-content:center; gap:7px;
+    -webkit-app-region: no-drag;
+    background: var(--bg);
+    border:1px solid var(--line);
+    border-radius:22px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.45);
+    cursor:pointer;
+    padding:0 12px 0 5px;
+  }
+  .mini .grip{
+    -webkit-app-region: drag;
+    width:14px; height:26px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    cursor:grab; opacity:.35;
+  }
+  .mini .grip i{ width:3px; height:3px; border-radius:2px; background:#e8eaee; display:block; }
+  .mini:hover .grip{ opacity:.7; }
+  .mini .t{
+    font-size:19px; font-weight:600;
+    font-variant-numeric: tabular-nums; letter-spacing:.5px;
+    color:var(--fg);
+  }
+  .mini.running .t{ color:var(--accent); }
+  .mini .dot{ animation: pulse 1.6s infinite; }
+  .mini .dot.off{ visibility:hidden; }
+
+  body.collapsed .card{ display:none; }
+  body.collapsed .mini{ display:flex; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <header>
+      <div class="sum" id="total">0:00</div>
+      <div class="sum-label" id="totalLabel">今天</div>
+      <div class="spacer"></div>
+      <div class="ico" id="collapse" title="收起成只显示时间">—</div>
+      <div class="ico" id="quit" title="隐藏到托盘（计时继续）">✕</div>
+    </header>
+
+    <div class="tabs">
+      <div class="tab on" data-view="today">今天</div>
+      <div class="tab" data-view="total">累计</div>
+    </div>
+
+    <div class="entry">
+      <input id="name" type="text" maxlength="60" autocomplete="off" spellcheck="false" placeholder="任务名" />
+      <input id="mins" type="number" min="1" max="600" step="1" placeholder="30" />
+      <span class="unit">分</span>
+    </div>
+
+    <div class="list" id="list"></div>
+
+    <footer>
+      <span id="hint">回车开始 · 填分钟＝倒计时 · 点行暂停</span>
+      <span><b id="count">0</b> 项</span>
+    </footer>
+  </div>
+
+  <div class="mini" id="mini" title="点一下展开（左侧小点可拖动）">
+    <div class="grip"><i></i><i></i><i></i></div>
+    <div class="dot off" id="miniDot"></div>
+    <div class="t" id="miniTime">0:00</div>
+  </div>
+
+<script>
+  const el = {
+    total: document.getElementById('total'),
+    totalLabel: document.getElementById('totalLabel'),
+    list: document.getElementById('list'),
+    name: document.getElementById('name'),
+    mins: document.getElementById('mins'),
+    quit: document.getElementById('quit'),
+    collapse: document.getElementById('collapse'),
+    count: document.getElementById('count'),
+    hint: document.getElementById('hint'),
+    mini: document.getElementById('mini'),
+    miniTime: document.getElementById('miniTime'),
+    miniDot: document.getElementById('miniDot'),
+  }
+
+  let state = { days: {}, activeId: null, activeDay: null, collapsed: false }
+  let view = 'today'
+
+  const pad = (n) => String(n).padStart(2, '0')
+  function todayKey(){
+    const d = new Date()
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  }
+  function usedOf(t){
+    return (t.seconds || 0) + (t.runningSince ? Math.max(0, (Date.now() - t.runningSince) / 1000) : 0)
+  }
+  function fmt(s){
+    s = Math.max(0, Math.floor(s))
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60
+    return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`
+  }
+  const days = () => Object.keys(state.days || {})
+  const todayTasks = () => (state.days && state.days[todayKey()]) || []
+  const liveId = () => (state.activeDay === todayKey() ? state.activeId : null)
+
+  function todaySum(){
+    return todayTasks().reduce((a, t) => a + usedOf(t), 0)
+  }
+  function aggregate(){
+    const map = new Map()
+    for (const day of days()){
+      for (const t of state.days[day] || []){
+        const cur = map.get(t.name) || { name: t.name, total: 0, today: 0, days: new Set() }
+        const s = usedOf(t)
+        cur.total += s
+        if (day === todayKey()) cur.today += s
+        if (s >= 1) cur.days.add(day)
+        map.set(t.name, cur)
+      }
+    }
+    return [...map.values()].sort((a, b) => b.total - a.total)
+  }
+  function leftOf(t){
+    if (!t.budgetSec) return null
+    const used = usedOf(t)
+    return { left: Math.max(0, t.budgetSec - used), pct: Math.min(1, used / t.budgetSec), done: used >= t.budgetSec - 0.5 }
+  }
+
+  function makeRow(opts){
+    const { cls = '', name, main, sub = '', running = false, kill = null, killHint = '', end = null, dot = false, bar = null } = opts
+    const r = document.createElement('div')
+    r.className = 'row ' + cls + (running ? ' running' : '')
+
+    if (dot){
+      const d = document.createElement('div')
+      d.className = 'dot'
+      d.style.visibility = running ? 'visible' : 'hidden'
+      r.append(d)
+    }
+
+    const n = document.createElement('div')
+    n.className = 'name'
+    n.textContent = name
+
+    const num = document.createElement('div')
+    num.className = 'num'
+    const m = document.createElement('div')
+    m.className = 'main'
+    m.textContent = main
+    num.append(m)
+    if (sub){
+      const s = document.createElement('div')
+      s.className = 'sub'
+      s.textContent = sub
+      num.append(s)
+    }
+    r.append(n, num)
+
+    if (end){
+      const b = document.createElement('div')
+      b.className = 'end'
+      b.textContent = '终止'
+      b.title = '提前终止：已用时间照常计入累计'
+      b.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        state = await window.studyTimer.end(end)
+        render()
+      })
+      r.append(b)
+    }
+
+    if (kill){
+      const k = document.createElement('div')
+      k.className = 'kill'
+      k.textContent = '✕'
+      k.title = killHint || '删除这条记录'
+      k.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        if (!k.classList.contains('armed')){
+          k.classList.add('armed')
+          k.textContent = '确认删除'
+          k.dataset.timer = String(setTimeout(() => {
+            k.classList.remove('armed')
+            k.textContent = '✕'
+          }, 3000))
+          return
+        }
+        clearTimeout(Number(k.dataset.timer) || 0)
+        state = await window.studyTimer.remove(kill)
+        render()
+      })
+      r.append(k)
+    }
+
+    if (bar !== null){
+      const b = document.createElement('div')
+      b.className = 'bar'
+      const i = document.createElement('i')
+      i.style.width = bar > 0 ? `${Math.max(3, Math.round(bar * 100))}%` : '0%'
+      b.append(i)
+      r.append(b)
+    }
+    return r
+  }
+
+  function renderMini(){
+    const active = liveId()
+    const t = todayTasks().find(x => x.id === active)
+    el.mini.classList.toggle('running', !!t)
+    el.miniDot.classList.toggle('off', !t)
+    if (t && !t.ended){
+      const l = leftOf(t)
+      el.miniTime.textContent = l && !l.done ? fmt(l.left) : fmt(usedOf(t))
+    } else {
+      el.miniTime.textContent = fmt(todaySum())
+    }
+  }
+
+  function render(){
+    const active = liveId()
+    renderMini()
+    el.hint.textContent = view === 'today'
+      ? '回车开始 · 填分钟＝倒计时 · 点行暂停'
+      : '按任务名合并 · 跨天累计'
+
+    const frag = document.createDocumentFragment()
+    let rows = 0
+
+    if (view === 'today'){
+      const ts = todayTasks()
+      rows = ts.length
+      el.totalLabel.textContent = '今天'
+      el.total.textContent = fmt(todaySum())
+      if (!ts.length){
+        el.list.innerHTML = '<div class="empty">今天还没有任务<br/>填个名字，需要的话再填分钟</div>'
+        el.count.textContent = '0'
+        fitWindow()
+        return
+      }
+      for (const t of ts){
+        const l = leftOf(t)
+        const hint = `删除会丢掉今天已记的 ${fmt(usedOf(t))}`
+        const budgetText = t.budgetSec
+          ? (t.budgetSec < 60 ? `共 ${Math.round(t.budgetSec)} 秒` : `共 ${Math.round(t.budgetSec / 60)} 分`)
+          : ''
+        if (t.ended){
+          frag.append(makeRow({ cls: 'ended', name: t.name, main: fmt(usedOf(t)),
+            sub: budgetText ? `已终止 · ${budgetText}` : '已终止', kill: t.id, killHint: hint, dot: true }))
+        } else if (l){
+          frag.append(makeRow({ cls: l.done ? 'done' : '', name: t.name,
+            main: l.done ? '完成' : fmt(l.left), sub: budgetText,
+            running: active === t.id, kill: t.id, killHint: hint,
+            end: l.done ? null : t.id, dot: true, bar: l.pct }))
+        } else {
+          frag.append(makeRow({ name: t.name, main: fmt(usedOf(t)),
+            running: active === t.id, kill: t.id, killHint: hint, end: t.id, dot: true }))
+        }
+      }
+      el.list.replaceChildren(frag)
+      ;[...el.list.children].forEach((r, i) => {
+        r.addEventListener('click', async () => {
+          state = await window.studyTimer.toggle(ts[i].id)
+          render()
+        })
+      })
+    } else {
+      const agg = aggregate()
+      rows = agg.length
+      el.totalLabel.textContent = '累计'
+      el.total.textContent = fmt(agg.reduce((a, x) => a + x.total, 0))
+      if (!agg.length){
+        el.list.innerHTML = '<div class="empty">还没有累计数据<br/>先到「今天」里开始计时</div>'
+        el.count.textContent = '0'
+        fitWindow()
+        return
+      }
+      for (const a of agg){
+        frag.append(makeRow({ cls: 'total', name: a.name, main: fmt(a.total),
+          sub: `记 ${a.days.size} 天 · 今天 ${fmt(a.today)}` }))
+      }
+      el.list.replaceChildren(frag)
+    }
+
+    el.count.textContent = String(rows)
+    fitWindow()
+  }
+
+  function tick(){
+    renderMini()
+    if (view === 'today'){
+      const ts = todayTasks()
+      const rows = el.list.querySelectorAll('.row')
+      rows.forEach((r, i) => {
+        const t = ts[i]
+        if (!t) return
+        const l = t.ended ? null : leftOf(t)
+        const m = r.querySelector('.num .main')
+        const fill = r.querySelector('.bar i')
+        if (l){
+          if (m) m.textContent = l.done ? '完成' : fmt(l.left)
+          if (fill) fill.style.width = l.pct > 0 ? `${Math.max(3, Math.round(l.pct * 100))}%` : '0%'
+          r.classList.toggle('done', l.done)
+        } else if (m){
+          m.textContent = fmt(usedOf(t))
+        }
+      })
+      el.total.textContent = fmt(todaySum())
+    } else {
+      const agg = aggregate()
+      el.total.textContent = fmt(agg.reduce((a, x) => a + x.total, 0))
+      const rows = el.list.querySelectorAll('.row')
+      rows.forEach((r, i) => {
+        const a = agg[i]
+        if (!a) return
+        const m = r.querySelector('.num .main')
+        if (m) m.textContent = fmt(a.total)
+        const s = r.querySelector('.num .sub')
+        if (s) s.textContent = `记 ${a.days.size} 天 · 今天 ${fmt(a.today)}`
+      })
+    }
+  }
+
+  function fitWindow(){
+    if (state.collapsed){
+      window.studyTimer.shape(142, 44)
+      return
+    }
+    requestAnimationFrame(() => {
+      const card = document.querySelector('.card')
+      const header = card.querySelector('header')
+      const tabs = card.querySelector('.tabs')
+      const entry = card.querySelector('.entry')
+      const footer = card.querySelector('footer')
+      const rowsH = Array.from(el.list.children).reduce((a, c) => a + c.offsetHeight, 0)
+      const need = header.offsetHeight + tabs.offsetHeight + entry.offsetHeight + footer.offsetHeight + Math.min(rowsH + 10, 430) + 2
+      window.studyTimer.shape(380, need)
+    })
+  }
+
+  function applyCollapsed(){
+    document.body.classList.toggle('collapsed', !!state.collapsed)
+    fitWindow()
+  }
+
+  async function submit(){
+    const v = el.name.value.trim()
+    if (!v) return
+    const raw = el.mins.value.trim()
+    const mins = raw === '' ? null : Math.max(1, Math.min(600, Math.round(Number(raw))))
+    state = await window.studyTimer.start(v, Number.isFinite(mins) ? mins : null)
+    el.name.value = ''
+    el.mins.value = ''
+    view = 'today'
+    syncTabs()
+    render()
+    el.name.focus()
+  }
+
+  el.name.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit() })
+  el.mins.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit() })
+
+  el.collapse.addEventListener('click', () => {
+    state.collapsed = true
+    window.studyTimer.collapse(true)
+    applyCollapsed()
+    renderMini()
+  })
+
+  el.mini.addEventListener('click', () => {
+    state.collapsed = false
+    window.studyTimer.collapse(false)
+    applyCollapsed()
+    render()
+  })
+
+  function syncTabs(){
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.view === view))
+  }
+
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => { view = t.dataset.view; syncTabs(); render() })
+  })
+
+  el.quit.addEventListener('click', () => window.studyTimer.hide())
+
+  window.studyTimer.onUpdate(s => { state = s; render(); applyCollapsed() })
+  window.studyTimer.get().then(s => { state = s; render(); applyCollapsed(); el.name.focus() })
+  setInterval(tick, 1000)
+</script>
+</body>
+</html>
