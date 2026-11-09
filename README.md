@@ -1,4 +1,4 @@
-﻿# 学习计时 · Study Timer
+# 学习计时 · Study Timer
 
 一个常驻桌面的极简学习计时器：**输入任务名回车就开始计时**，可以给任务设分钟数倒计时，到点提醒；所有任务按名字跨天累计学习时长。
 
@@ -25,17 +25,16 @@ Windows 桌面小工具，Electron 实现，零依赖、数据全本地、不联
 
 ## 安装（Windows）
 
-1. 下载本仓库：右上角 **Code → Download ZIP**，解压到任意目录（建议 `D:\SOFTWARE\study-timer`）。
-2. 在该目录里**右键 `install.ps1` → 使用 PowerShell 运行**。
-   或者在 PowerShell 里执行：
+1. 打开 [Releases](https://github.com/tyro-qyh/study-timer/releases/latest)，下载 `study-timer-x.y.z.zip`。
+2. 右键 zip → **全部解压缩**，解压到任意目录（建议 `D:\SOFTWARE`，别放在压缩包里直接运行）。
+3. 进入解压出来的 `study-timer` 文件夹，**双击 `安装.cmd`**。
+4. 等它跑完（首次会下载 Electron 运行时约 137 MB，解压后约 350 MB），桌面会出现「学习计时」。
 
-   ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-   ```
+双击桌面图标就能用了。安装脚本不写注册表、不开机自启、不做系统级改动。
 
-3. 脚本会在首次运行时下载 Electron 运行时（约 137 MB，解压后约 350 MB），然后创建桌面快捷方式「学习计时」。
-
-之后双击桌面图标即可。安装脚本不做任何系统级改动，不写注册表、不开机自启。
+> 也可以右键 `install.ps1` →「使用 PowerShell 运行」，效果一样。
+>
+> 如果首次启动时 Windows 弹出 SmartScreen「已保护你的电脑」，点「更多信息」→「仍要运行」（程序没有代码签名）。
 
 ### 手动运行
 
