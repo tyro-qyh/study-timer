@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>学习时长折线图</title>
+<style>
+  :root{
+    --bg:#12141a; --fg:#e8eaee; --dim:#8b93a1; --line:rgba(255,255,255,.08); --accent:#4ade80;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--fg); min-height:100vh;
+    font-family:'Segoe UI','Microsoft YaHei UI',-apple-system,system-ui,sans-serif;
+    padding:22px 26px 28px;
+  }
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  h1{font-size:15px;font-weight:600}
+  .meta{font-size:12px;color:var(--dim)}
+  .controls{display:flex;gap:8px;align-items:center;margin:14px 0 6px;flex-wrap:wrap}
+  select,button,label.file{
+    background:rgba(255,255,255,.06); color:var(--fg); border:1px solid var(--line);
+    border-radius:8px; padding:5px 10px; font-size:12px; font-family:inherit; cursor:pointer;
+  }
+  select:hover,button:hover,label.file:hover{background:rgba(255,255,255,.1)}
+  #legend{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 4px;font-size:12px;color:var(--dim)}
+  .lg{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;padding:2px 4px;border-radius:6px}
+  .lg:hover{background:rgba(255,255,255,.06)}
+  .lg.off{opacity:.35;text-decoration:line-through}
+  .lg i{width:10px;height:10px;border-radius:3px;display:block}
+  #chart{margin-top:6px}
+  #chart svg{display:block;max-width:100%;height:auto}
+  .drop{
+    margin-top:18px;border:1px dashed rgba(255,255,255,.18);border-radius:12px;
+    padding:42px 20px;text-align:center;color:var(--dim);font-size:13px;line-height:2;
+  }
+  .drop b{color:var(--fg);font-weight:500}
+  .empty{color:var(--dim);font-size:13px;padding:30px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">学习时长折线图</h1>
+  <span class="meta" id="meta"></span>
+</header>
+
+<div class="controls" id="controls" hidden>
+  <label class="file">选择 daily.csv<input id="file" type="file" accept=".csv,text/csv" hidden /></label>
+  <select id="range">
+    <option value="0">全部时间</option>
+    <option value="30">最近 30 天</option>
+    <option value="90">最近 90 天</option>
+  </select>
+  <button id="export">下载 SVG</button>
+</div>
+
+<div id="legend"></div>
+<div id="chart"></div>
+<div class="drop" id="drop">
+  把 <b>daily.csv</b> 拖到这里，或点上面的「选择 daily.csv」<br />
+  文件在计时器的 <b>data\daily.csv</b>
+</div>
+
+<script>
+(() => {
+  const COLORS = ['#60a5fa','#fbbf24','#f472b6','#a78bfa','#22d3ee','#fb923c','#a3e635','#e879f9','#94a3b8','#f87171'];
+  const TOTAL_COLOR = '#4ade80';
+  const state = { rows: [], hidden: new Set(), days: [], series: [], rangeDays: 0 };
+
+  const $ = (id) => document.getElementById(id);
+
+  function fmtHM(sec){
+    sec = Math.max(0, Math.round(sec));
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+    return h ? `${h}:${String(m).padStart(2,'0')}` : `${m} 分`;
+  }
+  function fmtAxis(sec){
+    if (sec <= 0) return '0';
+    if (sec < 3600) return `${Math.round(sec/60)}m`;
+    const h = sec / 3600;
+    return Math.abs(h - Math.round(h)) < 0.01 ? `${Math.round(h)}h` : `${h.toFixed(1)}h`;
+  }
+  function dayDiff(a, b){
+    return Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
+  }
+
+  // ---- CSV ----
+  function parseCSV(text){
+    const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
+    if (!lines.length) return [];
+    const head = splitLine(lines[0]).map(s => s.trim().toLowerCase());
+    const iDate = head.indexOf('date'), iTask = head.indexOf('task'), iSec = head.indexOf('seconds');
+    if (iDate < 0 || iTask < 0 || iSec < 0) throw new Error('CSV 需要 date,task,seconds 三列');
+    const out = [];
+    for (let i = 1; i < lines.length; i++){
+      const c = splitLine(lines[i]);
+      const d = (c[iDate] || '').trim();
+      const sec = Number(c[iSec]);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isFinite(sec)) continue;
+      out.push({ date: d, task: (c[iTask] || '').trim() || '(未命名)', seconds: Math.max(0, sec) });
+    }
+    return out;
+  }
+  function splitLine(line){
+    const out = []; let cur = ''; let q = false;
+    for (let i = 0; i < line.length; i++){
+      const ch = line[i];
+      if (q){
+        if (ch === '"'){
+          if (line[i+1] === '"'){ cur += '"'; i++; } else q = false;
+        } else cur += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === ','){ out.push(cur); cur = ''; }
+      else cur += ch;
+    }
+    out.push(cur);
+    return out;
+  }
+
+  // ---- 汇总 ----
+  function buildSeries(rows){
+    const perDayTask = new Map();      // day -> Map(task -> sec)
+    const tasks = new Map();           // task -> total
+    const daysSet = new Set();
+    for (const r of rows){
+      daysSet.add(r.date);
+      if (!perDayTask.has(r.date)) perDayTask.set(r.date, new Map());
+      const m = perDayTask.get(r.date);
+      m.set(r.task, (m.get(r.task) || 0) + r.seconds);
+      tasks.set(r.task, (tasks.get(r.task) || 0) + r.seconds);
+    }
+    let days = [...daysSet].sort();
+    if (state.rangeDays > 0 && days.length > state.rangeDays) days = days.slice(-state.rangeDays);
+
+    const names = [...tasks.keys()].sort((a, b) => tasks.get(b) - tasks.get(a));
+    const series = names.map((name, i) => ({
+      name,
+      color: COLORS[i % COLORS.length],
+      values: days.map(d => (perDayTask.get(d)?.get(name) || 0)),
+      total: tasks.get(name),
+    }));
+    const totalValues = days.map((_, idx) => series.reduce((a, s) => a + s.values[idx], 0));
+    series.unshift({ name: '合计', color: TOTAL_COLOR, values: totalValues, total: totalValues.reduce((a, b) => a + b, 0), main: true });
+    return { days, series };
+  }
+
+  // ---- SVG ----
+  function buildSVG(days, series){
+    const W = 960, H = 420, PL = 62, PR = 26, PT = 30, PB = 54;
+    const plotW = W - PL - PR, plotH = H - PT - PB;
+    const shown = series.filter(s => !state.hidden.has(s.name));
+    if (!days.length) return '<div class="empty">没有数据</div>';
+
+    const peak = Math.max(1, ...days.map((_, i) => series.filter(s => !s.main || !state.hidden.has('合计')).reduce((a, s) => a + (state.hidden.has(s.name) ? 0 : s.values[i]), 0)));
+    const maxVal = Math.max(peak, ...shown.flatMap(s => s.values));
+    const nice = [900, 1800, 3600, 7200, 10800, 14400, 21600];
+    const step = nice.find(s => maxVal <= s * 5) || 21600 * Math.ceil(maxVal / 108000);
+    const ymax = Math.max(step, Math.ceil(maxVal / step) * step);
+    const rows = Math.max(1, Math.min(6, Math.round(ymax / step)));
+    const span = days.length === 1 ? 0 : dayDiff(days[0], days[days.length - 1]);
+    const xOf = (i) => days.length === 1 ? PL + plotW / 2 : PL + (span ? dayDiff(days[0], days[i]) / span : i / (days.length - 1)) * plotW;
+    const yOf = (v) => PT + plotH - (v / ymax) * plotH;
+
+    const p = [];
+    p.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="'Segoe UI','Microsoft YaHei UI',sans-serif">`);
+    p.push(`<rect width="${W}" height="${H}" fill="#12141a"/>`);
+
+    for (let i = 0; i <= rows; i++){
+      const v = ymax * i / rows, y = yOf(v);
+      p.push(`<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W - PR}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,.08)"/>`);
+      p.push(`<text x="${PL - 10}" y="${(y + 4).toFixed(1)}" fill="#8b93a1" font-size="11" text-anchor="end">${fmtAxis(v)}</text>`);
+    }
+
+    for (const s of shown){
+      const pts = s.values.map((v, i) => [xOf(i), yOf(v)]);
+      const line = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+      if (!line) continue;
+      p.push(`<polyline points="${line}" fill="none" stroke="${s.color}" stroke-width="${s.main ? 2.4 : 1.6}" stroke-opacity="${s.main ? 1 : .85}" stroke-linejoin="round" stroke-linecap="round"/>`);
+      if (days.length <= 60 && !s.main){
+        for (const [x, y] of pts) if (y > 0) p.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2" fill="#12141a" stroke="${s.color}" stroke-width="1.3"/>`);
+      }
+    }
+
+    // 峰值（合计）
+    const total = series[0];
+    const ti = total.values.indexOf(Math.max(...total.values));
+    if (ti >= 0){
+      const x = xOf(ti), y = yOf(total.values[ti]);
+      p.push(`<text x="${x.toFixed(1)}" y="${(y - 9).toFixed(1)}" fill="#4ade80" font-size="11" text-anchor="middle">${fmtHM(total.values[ti])}</text>`);
+    }
+
+    const tickCount = Math.min(6, days.length);
+    const idxs = tickCount <= 1 ? [0] : [...new Set(Array.from({length: tickCount}, (_, k) => Math.round(k * (days.length - 1) / (tickCount - 1))))];
+    for (const i of idxs){
+      const x = xOf(i);
+      const anchor = days.length === 1 ? 'middle' : i === 0 ? 'start' : i === days.length - 1 ? 'end' : 'middle';
+      p.push(`<text x="${x.toFixed(1)}" y="${H - PB + 20}" fill="#8b93a1" font-size="11" text-anchor="${anchor}">${days[i]}</text>`);
+    }
+    p.push('</svg>');
+    return p.join('');
+  }
+
+  function render(){
+    if (!state.rows.length){ return; }
+    const built = buildSeries(state.rows);
+    state.days = built.days;
+    state.series = built.series;
+    $('chart').innerHTML = buildSVG(state.days, state.series);
+    $('meta').textContent = `合计 ${fmtHM(state.series[0].total)} · ${state.days.length} 天 · ${state.series.length - 1} 个任务`;
+    renderLegend();
+  }
+
+  function renderLegend(){
+    const box = $('legend');
+    box.innerHTML = '';
+    for (const s of state.series){
+      const el = document.createElement('div');
+      el.className = 'lg' + (state.hidden.has(s.name) ? ' off' : '');
+      const i = document.createElement('i');
+      i.style.background = s.color;
+      const t = document.createElement('span');
+      t.textContent = s.name;
+      el.append(i, t);
+      el.addEventListener('click', () => {
+        if (state.hidden.has(s.name)) state.hidden.delete(s.name); else state.hidden.add(s.name);
+        render();
+      });
+      box.append(el);
+    }
+  }
+
+  function loadRows(rows){
+    state.rows = rows;
+    $('drop').hidden = true;
+    $('controls').hidden = false;
+    render();
+  }
+
+  // ---- 事件 ----
+  $('range').addEventListener('change', (e) => { state.rangeDays = Number(e.target.value) || 0; render(); });
+  $('file').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    loadRows(parseCSV(await f.text()));
+  });
+  $('export').addEventListener('click', () => {
+    const svg = $('chart').querySelector('svg');
+    if (!svg) return;
+    const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'study-chart.svg';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+
+  const drop = $('drop');
+  ['dragover', 'dragenter'].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.style.borderColor = 'rgba(74,222,128,.6)'; }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.style.borderColor = ''; }));
+  drop.addEventListener('drop', async (e) => {
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    loadRows(parseCSV(await f.text()));
+  });
+
+  // 计时器带数据打开时直接渲染（数据脚本在页面末尾，等 DOM 解析完再读）
+  function boot(){
+    if (window.__STUDY_DATA__ && Array.isArray(window.__STUDY_DATA__.rows)){
+      loadRows(window.__STUDY_DATA__.rows);
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
+</body>
+</html>
