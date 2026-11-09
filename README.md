@@ -25,16 +25,22 @@ Windows 桌面小工具，Electron 实现，零依赖、数据全本地、不联
 
 ## 安装（Windows）
 
-1. 打开 [Releases](https://github.com/tyro-qyh/study-timer/releases/latest)，下载 `study-timer-x.y.z.zip`。
-2. 右键 zip → **全部解压缩**，解压到任意目录（建议 `D:\SOFTWARE`，别放在压缩包里直接运行）。
-3. 进入解压出来的 `study-timer` 文件夹，**双击 `安装.cmd`**。
-4. 等它跑完（首次会下载 Electron 运行时约 137 MB，解压后约 350 MB），桌面会出现「学习计时」。
+1. **下载**：打开 [Releases](https://github.com/tyro-qyh/study-timer/releases/latest)，在 **Assets** 里点 `study-timer-x.y.z.zip`（约 210 KB）。别下旁边的 `Source code (zip)`。
+2. **解压**：右键 zip → **全部解压缩** → 解压到 `D:\SOFTWARE`（或任意目录）。不要在压缩包里直接双击运行。
+3. **安装**：进入解压出来的 `study-timer` 文件夹，双击 **`安装.cmd`**。首次会下载 Electron 运行时（约 137 MB，解压后约 350 MB），等 1~3 分钟，别关窗口。
+4. **完成**：看到「装好了：桌面出现『学习计时』」，按任意键关闭。
+5. **第一次打开**：双击桌面「学习计时」。如果弹出蓝色窗口 **「Windows 已保护你的电脑」**（SmartScreen），点 **更多信息** → **仍要运行**。程序没有代码签名，这是正常现象，以后不会再问。
+6. **开始用**：任务名回车即开始计时；再加个分钟数（如 `30`）就是倒计时。
 
-双击桌面图标就能用了。安装脚本不写注册表、不开机自启、不做系统级改动。
+> 也可以右键 `install.ps1` →「使用 PowerShell 运行」，效果相同。
 
-> 也可以右键 `install.ps1` →「使用 PowerShell 运行」，效果一样。
->
-> 如果首次启动时 Windows 弹出 SmartScreen「已保护你的电脑」，点「更多信息」→「仍要运行」（程序没有代码签名）。
+### 装不上时
+
+| 现象 | 处理 |
+| --- | --- |
+| 黑窗口一闪就没 | 在该文件夹地址栏输入 `powershell` 回车，执行 `.\install.ps1` 看具体报错 |
+| 下载卡住 | 关掉重跑 `安装.cmd`；它优先走国内镜像 |
+| 桌面没有图标 | 重新双击 `安装.cmd`（已有运行时会跳过下载） |
 
 ### 手动运行
 
