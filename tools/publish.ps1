@@ -163,13 +163,17 @@ if ($NoRelease -or -not $Version) {
 
 # ---------- 4. zip + release ----------
 $build = Join-Path $root '_build'
-if (Test-Path $build) { Remove-Item $build -Recurse -Force }
+$outDir = Join-Path $root '_build-out'
+if (Test-Path $build) { Remove-Item $build -Recurse -Force -ErrorAction SilentlyContinue`nRemove-Item $outDir -Recurse -Force -ErrorAction SilentlyContinue }
+if (Test-Path $outDir) { Remove-Item $outDir -Recurse -Force }
 $stage = Join-Path $build "study-timer"
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Copy-Item (Join-Path $repoDir '*') $stage -Recurse -Force
 Copy-Item (Join-Path $repoDir '.gitignore') $stage -Force
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zip = Join-Path $build "study-timer-$Version.zip"
+# zip 必须放在被压缩目录之外，否则会把自身也打进去（并锁住文件）
+$zip = Join-Path $outDir "study-timer-$Version.zip"
 [IO.Compression.ZipFile]::CreateFromDirectory($build, $zip, [IO.Compression.CompressionLevel]::Optimal, $false)
 
 $tag = "v$Version"
@@ -206,4 +210,4 @@ $asset = Invoke-RestMethod -Uri $upUrl -Headers $upHeaders -Method Post -InFile 
 Write-Host ("release {0} 附件 {1}（{2} KB）" -f $tag, $asset.name, [math]::Round($asset.size / 1KB)) -ForegroundColor Green
 Write-Host ("{0}/releases/tag/{1}" -f "https://github.com/$owner/$name", $tag) -ForegroundColor Green
 
-Remove-Item $build -Recurse -Force
+Remove-Item $build -Recurse -Force -ErrorAction SilentlyContinue`nRemove-Item $outDir -Recurse -Force -ErrorAction SilentlyContinue
