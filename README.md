@@ -109,6 +109,10 @@ A minimal always-on-top study timer for Windows. Type a task name and hit Enter 
 
 Install: download the ZIP, run `install.ps1` in PowerShell (it fetches the Electron runtime on first run), then launch from the desktop shortcut.
 
+## 更新日志
+
+见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## License
 
 MIT
