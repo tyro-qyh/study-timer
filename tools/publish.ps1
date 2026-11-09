@@ -164,7 +164,7 @@ if ($NoRelease -or -not $Version) {
 # ---------- 4. zip + release ----------
 $build = Join-Path $root '_build'
 $outDir = Join-Path $root '_build-out'
-if (Test-Path $build) { Remove-Item $build -Recurse -Force -ErrorAction SilentlyContinue`nRemove-Item $outDir -Recurse -Force -ErrorAction SilentlyContinue }
+if (Test-Path $build) { Remove-Item $build -Recurse -Force -ErrorAction SilentlyContinue }
 if (Test-Path $outDir) { Remove-Item $outDir -Recurse -Force }
 $stage = Join-Path $build "study-timer"
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
@@ -210,4 +210,5 @@ $asset = Invoke-RestMethod -Uri $upUrl -Headers $upHeaders -Method Post -InFile 
 Write-Host ("release {0} 附件 {1}（{2} KB）" -f $tag, $asset.name, [math]::Round($asset.size / 1KB)) -ForegroundColor Green
 Write-Host ("{0}/releases/tag/{1}" -f "https://github.com/$owner/$name", $tag) -ForegroundColor Green
 
-Remove-Item $build -Recurse -Force -ErrorAction SilentlyContinue`nRemove-Item $outDir -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $build -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $outDir -Recurse -Force -ErrorAction SilentlyContinue
