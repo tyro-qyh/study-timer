@@ -23,6 +23,8 @@
   }
   select:hover,button:hover,label.file:hover{background:rgba(255,255,255,.1)}
   #legend{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 4px;font-size:12px;color:var(--dim)}
+  .chk{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--dim);cursor:pointer;user-select:none}
+  .chk input{accent-color:#4ade80}
   .lg{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;padding:2px 4px;border-radius:6px}
   .lg:hover{background:rgba(255,255,255,.06)}
   .lg.off{opacity:.35;text-decoration:line-through}
@@ -50,6 +52,7 @@
     <option value="30">最近 30 天</option>
     <option value="90">最近 90 天</option>
   </select>
+  <label class="chk"><input type="checkbox" id="vals" checked /> 显示数值</label>
   <button id="export">下载 SVG</button>
 </div>
 
@@ -64,9 +67,14 @@
 (() => {
   const COLORS = ['#60a5fa','#fbbf24','#f472b6','#a78bfa','#22d3ee','#fb923c','#a3e635','#e879f9','#94a3b8','#f87171'];
   const TOTAL_COLOR = '#4ade80';
-  const state = { rows: [], hidden: new Set(), days: [], series: [], rangeDays: 0 };
+  const state = { rows: [], hidden: new Set(), days: [], series: [], rangeDays: 0, showValues: true };
 
   const $ = (id) => document.getElementById(id);
+  const measureCtx = document.createElement('canvas').getContext('2d');
+  const measureText = (text, size) => {
+    measureCtx.font = `${size}px 'Segoe UI','Microsoft YaHei UI',sans-serif`;
+    return measureCtx.measureText(text).width;
+  };
 
   function fmtHM(sec){
     sec = Math.max(0, Math.round(sec));
@@ -170,22 +178,62 @@
       p.push(`<text x="${PL - 10}" y="${(y + 4).toFixed(1)}" fill="#8b93a1" font-size="11" text-anchor="end">${fmtAxis(v)}</text>`);
     }
 
+    // 合计：面积 + 加粗主线（带光晕），和任务线明显区分
+    const totalSeries = series[0];
+    if (totalSeries && !state.hidden.has(totalSeries.name) && totalSeries.values.length){
+      const pts = totalSeries.values.map((v, i) => [xOf(i), yOf(v)]);
+      const area = `${pts[0][0].toFixed(1)},${(PT + plotH).toFixed(1)} ` +
+        pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ') +
+        ` ${pts[pts.length - 1][0].toFixed(1)},${(PT + plotH).toFixed(1)}`;
+      p.push(`<polygon points="${area}" fill="${TOTAL_COLOR}" opacity="0.06"/>`);
+      p.push(`<polyline points="${pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}" fill="none" stroke="${TOTAL_COLOR}" stroke-width="9" stroke-opacity="0.12" stroke-linejoin="round" stroke-linecap="round"/>`);
+    }
+
     for (const s of shown){
       const pts = s.values.map((v, i) => [xOf(i), yOf(v)]);
       const line = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
       if (!line) continue;
-      p.push(`<polyline points="${line}" fill="none" stroke="${s.color}" stroke-width="${s.main ? 2.4 : 1.6}" stroke-opacity="${s.main ? 1 : .85}" stroke-linejoin="round" stroke-linecap="round"/>`);
-      if (days.length <= 60 && !s.main){
-        for (const [x, y] of pts) if (y > 0) p.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2" fill="#12141a" stroke="${s.color}" stroke-width="1.3"/>`);
+      p.push(`<polyline points="${line}" fill="none" stroke="${s.color}" stroke-width="${s.main ? 3.2 : 1.6}" stroke-opacity="${s.main ? 1 : .8}" stroke-linejoin="round" stroke-linecap="round"/>`);
+      if (days.length <= 90){
+        for (let i = 0; i < pts.length; i++){
+          if (s.values[i] <= 0) continue;
+          const [x, y] = pts[i];
+          p.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${s.main ? 2.6 : 2.2}" fill="#12141a" stroke="${s.color}" stroke-width="${s.main ? 1.8 : 1.3}"/>`);
+        }
       }
     }
 
-    // 峰值（合计）
-    const total = series[0];
-    const ti = total.values.indexOf(Math.max(...total.values));
-    if (ti >= 0){
-      const x = xOf(ti), y = yOf(total.values[ti]);
-      p.push(`<text x="${x.toFixed(1)}" y="${(y - 9).toFixed(1)}" fill="#4ade80" font-size="11" text-anchor="middle">${fmtHM(total.values[ti])}</text>`);
+    // 每个点都标数值：合计在上方，任务在下方，自动避让
+    if (state.showValues !== false){
+      const SIZE = 10, placed = [];
+      const order = shown.slice().sort((a, b) => (b.main ? 1 : 0) - (a.main ? 1 : 0) || b.total - a.total);
+      const labelTasks = days.length <= 21; // 天数太多时只标合计，否则糊成一片
+      for (const s of order){
+        if (!s.main && !labelTasks) continue;
+        for (let i = 0; i < s.values.length; i++){
+          const v = s.values[i];
+          if (v <= 0) continue;
+          const text = fmtHM(v);
+          const w = measureText(text, SIZE);
+          const cx = Math.max(PL + w / 2 + 2, Math.min(W - PR - w / 2 - 2, xOf(i)));
+          const y0 = yOf(v);
+          const cands = s.main ? [y0 - 8, y0 - 19, y0 + 15, y0 + 26] : [y0 + 15, y0 + 26, y0 - 8, y0 - 19];
+          let done = false;
+          for (const y of cands){
+            if (y < PT + 8 || y > PT + plotH + 16) continue;
+            const box = { x1: cx - w / 2 - 2, y1: y - SIZE, x2: cx + w / 2 + 2, y2: y + 3 };
+            if (placed.some(b => !(box.x2 < b.x1 || box.x1 > b.x2 || box.y2 < b.y1 || box.y1 > b.y2))) continue;
+            placed.push(box);
+            p.push(`<text x="${cx.toFixed(1)}" y="${y.toFixed(1)}" fill="${s.main ? '#9ff5bd' : s.color}" font-size="${SIZE}" font-weight="${s.main ? 600 : 400}" text-anchor="middle">${text}</text>`);
+            done = true;
+            break;
+          }
+          if (!done){
+            // 实在挤不下也要画，避免漏点（半透明，能看出重叠）
+            p.push(`<text x="${cx.toFixed(1)}" y="${(y0 - 8).toFixed(1)}" fill="${s.color}" font-size="${SIZE}" opacity=".55" text-anchor="middle">${text}</text>`);
+          }
+        }
+      }
     }
 
     const tickCount = Math.min(6, days.length);
@@ -237,6 +285,7 @@
 
   // ---- 事件 ----
   $('range').addEventListener('change', (e) => { state.rangeDays = Number(e.target.value) || 0; render(); });
+  $('vals').addEventListener('change', (e) => { state.showValues = e.target.checked; render(); });
   $('file').addEventListener('change', async (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
